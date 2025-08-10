@@ -1,0 +1,97 @@
+name: Test All Workflows (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Ref to run (e.g., main)"
+        required: true
+        default: "main"
+
+jobs:
+  test-all:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}  # PAT 필요
+      REPO: ${{ github.repository }}
+      REF: ${{ inputs.branch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        shell: bash
+        run: choco install gh -y
+
+      - name: Define workflows list
+        id: list
+        shell: bash
+        run: |
+          # 여기에 "테스트하고 싶은" 워크플로우 파일명을 나열
+          # release/build는 원하면 제외 가능
+          WF=("ci.yml" "lint-autofix.yml" "guidelines-watch.yml" "blueprint-watch.yml" "repo-health.yml" "build-windows.yml")
+          printf "%s\n" "${WF[@]}" > workflows.txt
+          echo "count=${#WF[@]}" >> $GITHUB_OUTPUT
+          echo "start=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Dispatch all
+        shell: bash
+        run: |
+          while read -r wf; do
+            echo "::group::Dispatch $wf"
+            gh api \
+              -X POST \
+              repos/$REPO/actions/workflows/$wf/dispatches \
+              -f ref="$REF"
+            echo "::endgroup::"
+          done < workflows.txt
+
+      - name: Wait for completion & collect results
+        id: wait
+        shell: bash
+        run: |
+          start="${{ steps.list.outputs.start }}"
+          failures=0
+          printf "%-24s | %-10s | %s\n" "WORKFLOW" "STATUS" "URL" > summary.txt
+          echo "--------------------------------------------------------------" >> summary.txt
+
+          while read -r wf; do
+            echo "Waiting $wf ..."
+            # 최근 실행(run) 찾아서 완료까지 폴링
+            for i in {1..60}; do
+              run_json=$(gh api repos/$REPO/actions/workflows/$wf/runs -f per_page=1)
+              url=$(echo "$run_json" | jq -r '.workflow_runs[0].html_url')
+              status=$(echo "$run_json" | jq -r '.workflow_runs[0].status')
+              conclusion=$(echo "$run_json" | jq -r '.workflow_runs[0].conclusion')
+              created=$(echo "$run_json" | jq -r '.workflow_runs[0].created_at')
+
+              # 오케스트레이터 시작 이후의 런만 유효
+              newer=$(python - << PY
+              from datetime import datetime, timezone
+              print(datetime.fromisoformat("$created".replace("Z","+00:00")) >= datetime.fromisoformat("$start".replace("Z","+00:00")))
+              PY
+              )
+              if [ "$newer" != "True" ]; then
+                sleep 2
+                continue
+              fi
+
+              if [ "$status" = "completed" ]; then
+                if [ "$conclusion" != "success" ]; then failures=$((failures+1)); fi
+                printf "%-24s | %-10s | %s\n" "$wf" "$conclusion" "$url" >> summary.txt
+                break
+              fi
+              sleep 5
+            done
+          done < workflows.txt
+
+          echo "failures=$failures" >> $GITHUB_OUTPUT
+          echo "=== SUMMARY ==="
+          cat summary.txt
+          echo "::notice title=Workflow Summary::$(printf '%s' "$(cat summary.txt | sed ':a;N;$!ba;s/\n/%0A/g')")"
+
+      - name: Fail if any workflow failed
+        if: ${{ steps.wait.outputs.failures != '0' }}
+        run: |
+          echo "Some workflows failed."
+          exit 1

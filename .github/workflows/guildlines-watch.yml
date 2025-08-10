@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   notify:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Open issue about blueprint change
         uses: actions/github-script@v7

@@ -63,7 +63,7 @@ from src.config.settings import SHARE_INTERVAL_SECONDS, API_SERVERS
 from src.client.area_selector import AreaSelector
 from src.config.settings_manager import save_settings, load_settings, detect_resolution
 from src.config.resolution_presets import RESOLUTION_PRESETS
-
+from src.core.env_guard import NpcapMissingError
 
 class WorkerSignals(QObject):
     update_status = pyqtSignal(str)
@@ -333,6 +333,11 @@ class AlbionBeaconApp(QWidget):
             self.user_table.setItem(current_row, 4, QTableWidgetItem(user.get('last_updated', '')))
             current_row += 1
 
+    def toggle_capture(self):
+        try:
+            self._runner.start_capture(...)
+        except NpcapMissingError as e:
+            QMessageBox.warning(self, "Npcap Required", str(e))
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

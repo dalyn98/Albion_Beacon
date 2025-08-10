@@ -1,4 +1,4 @@
-name: Release
+name: Release (Windows)
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version_override:
-        description: "VERSION 파일 대신 이 값을 릴리즈 태그로 사용 (예: v3.2.2)"
+        description: "ex: v3.2.2"
         required: false
         type: string
 
@@ -15,47 +15,38 @@ permissions:
 
 jobs:
   tag_and_release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
 
       - name: Resolve version (strict)
         id: ver
+        shell: bash
         run: |
           set -e
-          # 1) 입력이 있으면 우선
           if [ -n "${{ inputs.version_override }}" ]; then
             ver="${{ inputs.version_override }}"
           elif [ -f VERSION ]; then
             ver="$(tr -d '\r\n' < VERSION)"
           else
-            echo "::error::VERSION file missing and no version_override provided."
-            exit 1
+            echo "::error::VERSION file missing and no version_override provided."; exit 1
           fi
-
-          # 2) 공백 방지
           if [ -z "$ver" ]; then
-            echo "::error::Resolved version is empty. Check VERSION content."
-            exit 1
+            echo "::error::Resolved version is empty. Check VERSION content."; exit 1
           fi
-
-          # 3) vX.Y.Z 형식 검증
           if ! echo "$ver" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Invalid version '$ver'. Use format like v3.2.1"
-            exit 1
+            echo "::error::Invalid version '$ver'. Use format like v3.2.1"; exit 1
           fi
-
           echo "version=$ver" >> "$GITHUB_OUTPUT"
           echo "Using version: $ver"
 
       - name: Create tag if missing
+        shell: bash
         run: |
-          set -e
           TAG="${{ steps.ver.outputs.version }}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists, skip tagging."
+            echo "Tag $TAG exists."
           else
             git tag -a "$TAG" -m "Release $TAG"
             git push origin "$TAG"
@@ -68,17 +59,15 @@ jobs:
           script: |
             const tag = '${{ steps.ver.outputs.version }}';
             const notes = await github.repos.generateReleaseNotes({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
+              owner: context.repo.owner, repo: context.repo.repo, tag_name: tag
             });
             core.setOutput('body', notes.data.body);
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (draft)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.version }}
           name: Release ${{ steps.ver.outputs.version }}
           body: ${{ steps.notes.outputs.body }}
-          draft: true           # ← 릴리즈는 드래프트로만 생성
-          prerelease: true      # ← 정식 전 릴리즈 표시
+          draft: true
+          prerelease: true

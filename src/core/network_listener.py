@@ -22,7 +22,7 @@
 
 """
 from scapy.all import sniff, get_working_if, UDP, Raw
-
+from src.core.env_guard import requires_npcap
 # Albion Online Photon Engine UDP 포트
 ALBION_PORT = 5055
 
@@ -37,12 +37,13 @@ def process_packet(packet):
         # TODO: 여기에 payload_hex를 분석하여 위치 정보를 추출하는 코드가 들어갈 예정
         print(f"캡처된 UDP Payload: {payload_hex[:100]}...")  # 너무 길기 때문에 앞 100자만 출력
 
-
+@requires_npcap
 def start_capture(stop_event):
     """
     활성 인터페이스에서 트래픽 캡처를 시작합니다.
     GUI의 중단 신호를 받기 위해 stop_event를 인자로 받습니다.
     """
+
     try:
         iface = get_working_if()
         if not iface:
