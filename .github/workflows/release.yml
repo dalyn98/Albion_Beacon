@@ -21,19 +21,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve version
+      - name: Resolve version (strict)
         id: ver
         run: |
+          set -e
+          # 1) 입력이 있으면 우선
           if [ -n "${{ inputs.version_override }}" ]; then
-            echo "version=${{ inputs.version_override }}" >> $GITHUB_OUTPUT
+            ver="${{ inputs.version_override }}"
           elif [ -f VERSION ]; then
-            v=$(cat VERSION | tr -d '\r\n')
-            echo "version=$v" >> $GITHUB_OUTPUT
+            ver="$(tr -d '\r\n' < VERSION)"
           else
-            echo "VERSION 파일이 없습니다." 1>&2
+            echo "::error::VERSION file missing and no version_override provided."
             exit 1
           fi
-          echo "Resolved version: $(cat VERSION 2>/dev/null || echo ${{ inputs.version_override }})"
+
+          # 2) 공백 방지
+          if [ -z "$ver" ]; then
+            echo "::error::Resolved version is empty. Check VERSION content."
+            exit 1
+          fi
+
+          # 3) vX.Y.Z 형식 검증
+          if ! echo "$ver" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version '$ver'. Use format like v3.2.1"
+            exit 1
+          fi
+
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Using version: $ver"
 
       - name: Create tag if missing
         run: |
