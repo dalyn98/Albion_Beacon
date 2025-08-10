@@ -74,15 +74,36 @@ def ocr_for_zone_name(pil_image):
     except Exception as e:
         print(f"OCR (Zone) 처리 중 오류: {e}")
         return ""
+def _list_installed_tess_langs():
+    """설치된 Tesseract 언어 목록을 반환. 실패 시 {'eng'}."""
+    try:
+        if pytesseract is None:
+            return {"eng"}
+        langs = pytesseract.get_languages(config="")
+        return set(langs) if langs else {"eng"}
+    except Exception:
+        return {"eng"}
 
+def _pick_available_langs(preferred_list):
+    """
+    선호 언어 목록 중 설치되어 있는 것만 '+'로 조합해 문자열로 반환.
+    전혀 없으면 'eng' 반환. (ex) 'eng+kor'
+    """
+    avail = _list_installed_tess_langs()
+    selected = [l for l in preferred_list if l in avail]
+    return "+".join(selected) if selected else "eng"
 
 def ocr_for_authentication(pil_image):
     """'사용자 인증'을 위한 전문 OCR 함수"""
     if pil_image is None: return ""
     try:
         processed_image = _preprocess_image(pil_image)
-        # 인증 창은 다양한 텍스트 배치를 가질 수 있으므로, 너그러운 psm 6 사용
-        custom_config = r'--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\s'
+          # 다양한 배치/분산 텍스트 대응: psm 11 (sparse text)
+          # Tesseract 언어는 설치 여부에 따라 eng(+kor+spa)로 구성.
+        langs = _pick_available_langs(["eng", "kor", "spa"])
+          # NOTE: 기존 _get_raw_text 시그니처를 유지하기 위해 config 문자열 내에 -l 전달.
+          # (pytesseract에선 lang= 파라미터 권장이지만, 여기선 내부 구현 변경 없이 호환 유지)
+        custom_config = rf'--psm 11 -l {langs}'
         raw_text = _get_raw_text(processed_image, custom_config)
         print(f"OCR (Auth): '{raw_text}'")
         return raw_text

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual env & build
+.venv/
+dist/
+build/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# App artifacts
+captures/
+*.pcap
+*.jsonl
+*.db
+
+# Secrets / local config
+.env
+.env.*
+
+/captures/*.pcap
+/captures/*.jsonl

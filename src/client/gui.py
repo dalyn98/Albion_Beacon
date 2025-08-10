@@ -57,13 +57,14 @@ from PyQt5.QtCore import Qt, QCoreApplication, pyqtSignal, QObject
 from src.core.capture import capture_screen_area
 from src.core.ocr import ocr_for_authentication
 # 새로운 네트워크 리스너 임포트
-from src.core.network_listener import start_capture
+from src.client.capture_controls import UdpCaptureController
 from src.client.api_client import register_user, verify_user, send_location_data, get_all_users
 from src.config.settings import SHARE_INTERVAL_SECONDS, API_SERVERS
 from src.client.area_selector import AreaSelector
 from src.config.settings_manager import save_settings, load_settings, detect_resolution
 from src.config.resolution_presets import RESOLUTION_PRESETS
 from src.core.env_guard import NpcapMissingError
+from unicodedata import normalize
 
 class WorkerSignals(QObject):
     update_status = pyqtSignal(str)
@@ -73,6 +74,7 @@ class WorkerSignals(QObject):
 class AlbionBeaconApp(QWidget):
     def __init__(self):
         super().__init__()
+        self.capture = UdpCaptureController()
         self.is_sharing = False
         self.worker_thread = None
         self.capture_stop_event = Event()
@@ -235,7 +237,7 @@ class AlbionBeaconApp(QWidget):
             return
 
         full_text_from_screen = ocr_for_authentication(pil_image)
-        text_lower = full_text_from_screen.lower()
+        text_lower = " ".join(normalize("NFKD", full_text_from_screen).casefold().split())
         other_player_keywords = ['whisper', 'mail', 'friend', '귓속말', '메일', '친구', 'invitar', 'susurrar']
         has_other_keywords = any(keyword in text_lower for keyword in other_player_keywords)
         is_name_found = username_to_verify.lower() in text_lower
