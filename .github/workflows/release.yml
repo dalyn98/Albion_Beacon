@@ -59,7 +59,7 @@ jobs:
             });
             core.setOutput('body', notes.data.body);
 
-       - name: Create GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.version }}
