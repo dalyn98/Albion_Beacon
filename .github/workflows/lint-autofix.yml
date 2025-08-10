@@ -1,0 +1,61 @@
+name: Lint & Autofix (ruff)
+
+on:
+  push:
+    branches: [ main, dev ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".github/workflows/lint-autofix.yml"
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".github/workflows/lint-autofix.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # 봇 커밋에 필요
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      # 1) 포맷 → 2) 자동 수정 → 3) 결과 커밋 → 4) 최종 체크
+      - name: Ruff format
+        run: ruff format
+
+      - name: Ruff autofix
+        run: ruff check --fix src tests
+
+      - name: Commit autofixes (bot)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style(ruff): auto-fix lint & format issues"
+          commit_user_name: "actions-bot"
+          commit_user_email: "actions@users.noreply.github.com"
+          branch: ${{ github.head_ref || github.ref_name }}
+
+      - name: Ruff check (final gate)
+        run: ruff check src tests
